@@ -35,8 +35,12 @@ jobs:
         run: |
           cp app/build/outputs/apk/debug/app-debug.apk FreeMyTV-TX6-test.apk
           sha256sum FreeMyTV-TX6-test.apk > FreeMyTV-TX6-test.apk.sha256
+          # Recriar a release experimental evita conflito com assets antigos
+          # que provocavam HTTP 404 ao tentar substituir arquivos.
           if gh release view tx6-test-latest >/dev/null 2>&1; then
-            gh release upload tx6-test-latest FreeMyTV-TX6-test.apk FreeMyTV-TX6-test.apk.sha256 --clobber
-          else
-            gh release create tx6-test-latest FreeMyTV-TX6-test.apk FreeMyTV-TX6-test.apk.sha256 --title "TX6 - APK experimental" --notes "APK de desenvolvimento. Instalar apenas na TX6 com aprovacao." --prerelease
+            gh release delete tx6-test-latest --yes --cleanup-tag
           fi
+          gh release create tx6-test-latest FreeMyTV-TX6-test.apk FreeMyTV-TX6-test.apk.sha256 \
+            --title "TX6 - APK experimental" \
+            --notes "APK de desenvolvimento para TX6. Teste separado da instalacao anterior." \
+            --prerelease --target "$GITHUB_SHA"
