@@ -1,12 +1,20 @@
 package org.freemytv.tx6test;
-import android.app.Activity;
-import android.os.Bundle;
-import android.view.View;
-import android.webkit.WebView;
-import android.webkit.WebSettings;
+import android.app.Activity;import android.os.Bundle;import android.content.Intent;import android.content.pm.PackageManager;import android.content.pm.ResolveInfo;import android.content.SharedPreferences;import android.webkit.*;import android.view.*;import org.json.*;import java.net.*;import java.io.*;import java.util.*;
 public class MainActivity extends Activity {
- private WebView web;
- @Override public void onCreate(Bundle s){super.onCreate(s);getWindow().getDecorView().setSystemUiVisibility(5894|1024|512); web=new WebView(this);web.setBackgroundColor(0xfff6f7f9);web.setFocusable(true);web.setFocusableInTouchMode(true);WebSettings w=web.getSettings();w.setJavaScriptEnabled(true);w.setDomStorageEnabled(true);setContentView(web);web.loadUrl("file:///android_asset/index.html");web.requestFocus();}
- @Override public void onBackPressed(){if(web!=null)web.evaluateJavascript("goHome()",v->{if("false".equals(v))finish();});else finish();}
- @Override protected void onDestroy(){if(web!=null){web.destroy();web=null;}super.onDestroy();}
+ WebView web; SharedPreferences prefs;
+ @Override public void onCreate(Bundle b){super.onCreate(b);prefs=getSharedPreferences("settings",0);getWindow().getDecorView().setSystemUiVisibility(5894|1024|512);web=new WebView(this);web.setBackgroundColor(0xfff5f7fa);web.getSettings().setJavaScriptEnabled(true);web.getSettings().setDomStorageEnabled(true);web.getSettings().setAllowFileAccess(true);web.addJavascriptInterface(new Bridge(),"TV");setContentView(web);web.loadUrl("file:///android_asset/index.html");web.requestFocus();}
+ void emit(String fn,String json){runOnUiThread(()->web.evaluateJavascript("window."+fn+"("+json+")",null));}
+ class Bridge {
+ @JavascriptInterface public String get(String key){return prefs.getString(key,"");}
+ @JavascriptInterface public void set(String key,String value){if(Arrays.asList("tmdb","latitude","longitude","city").contains(key))prefs.edit().putString(key,value).apply();}
+ @JavascriptInterface public void launch(String pkg){runOnUiThread(()->{try{Intent i=getPackageManager().getLaunchIntentForPackage(pkg);if(i!=null)startActivity(i);}catch(Exception ignored){}});}
+ @JavascriptInterface public void openInputs(){runOnUiThread(()->{try{startActivity(new Intent("android.settings.INPUT_METHOD_SETTINGS"));}catch(Exception ignored){} });}
+ @JavascriptInterface public void liveTV(){runOnUiThread(()->{try{startActivity(new Intent("android.intent.action.VIEW",android.net.Uri.parse("tv:")));}catch(Exception e){try{Intent i=getPackageManager().getLaunchIntentForPackage("com.tcl.tv");if(i!=null)startActivity(i);}catch(Exception ignored){}}});}
+ @JavascriptInterface public void apps(){new Thread(()->{JSONArray arr=new JSONArray();try{Intent query=new Intent(Intent.ACTION_MAIN);query.addCategory(Intent.CATEGORY_LEANBACK_LAUNCHER);List<ResolveInfo> list=getPackageManager().queryIntentActivities(query,0);for(ResolveInfo r:list){String pkg=r.activityInfo.packageName;if(pkg.equals(getPackageName()))continue;JSONObject o=new JSONObject();o.put("name",String.valueOf(r.loadLabel(getPackageManager())));o.put("pkg",pkg);arr.put(o);}}catch(Exception ignored){}emit("onApps",arr.toString());}).start();}
+ @JavascriptInterface public void tmdb(String kind){String key=prefs.getString("tmdb","");if(key.isEmpty()){emit("onMovies","[]");return;}String endpoint=kind.equals("tv")?"trending/tv/week":"trending/movie/week";request("https://api.themoviedb.org/3/"+endpoint+"?api_key="+encode(key)+"&language=pt-BR&region=BR","onMovies",true);}
+ @JavascriptInterface public void weather(){String lat=prefs.getString("latitude","-20.13"),lon=prefs.getString("longitude","-40.31");request("https://api.open-meteo.com/v1/forecast?latitude="+encode(lat)+"&longitude="+encode(lon)+"&daily=temperature_2m_max,temperature_2m_min,weather_code&current=temperature_2m,weather_code&timezone=America%2FSao_Paulo&forecast_days=5","onWeather",false);}
+ }
+ String encode(String s){try{return java.net.URLEncoder.encode(s,"UTF-8");}catch(Exception e){return "";}}
+ void request(String url,String callback,boolean movies){new Thread(()->{String out="{}";try{HttpURLConnection c=(HttpURLConnection)new URL(url).openConnection();c.setConnectTimeout(7000);c.setReadTimeout(7000);c.setRequestProperty("User-Agent","FreeMyTV-TX6/0.5");try(InputStream s=c.getInputStream();ByteArrayOutputStream b=new ByteArrayOutputStream()){byte[] buf=new byte[4096];int n;while((n=s.read(buf))!=-1&&b.size()<150000)b.write(buf,0,n);out=b.toString("UTF-8");}c.disconnect();if(movies)out=new JSONObject(out).optJSONArray("results").toString();}catch(Exception e){out=movies?"[]":"{}";}emit(callback,out);}).start();}
+ @Override public void onBackPressed(){web.evaluateJavascript("goHome()",v->{if("false".equals(v))finish();});}
 }
