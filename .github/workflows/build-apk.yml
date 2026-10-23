@@ -17,6 +17,8 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.7'
+      - name: Registrar build solicitada
+        run: echo "Recompilando Free My TV TX6 para entrega automatica"
       - name: Compilar APK com SDK preinstalado
         env:
           TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
